@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>MyBenchmark Ultimate</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Benchmark">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#20242b">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        :root { color-scheme: dark; --floor: #20242b; --steel: #2b3039; --steel2: #353b46; --chalk: #f1f3f5; --dim: #98a1ad;
+                --red: #e5383b; --green: #34c759; --c: #98a1ad;
+                --display: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif; }
+        * { -webkit-tap-highlight-color: transparent; }
+        html { background: var(--floor); }
+        body { margin: 0 auto; max-width: 560px; font-family: -apple-system, system-ui, sans-serif; color: var(--chalk); background: var(--floor);
+               padding: calc(env(safe-area-inset-top) + 18px) 18px calc(100px + env(safe-area-inset-bottom)); }
+        h1 { font: 800 34px/1.1 var(--display); letter-spacing: -0.02em; margin: 6px 0 20px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; z-index: 10; padding-bottom: env(safe-area-inset-bottom);
+                background: rgba(32,36,43,.88); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid rgba(255,255,255,.08); }
+        .tab-btn { flex: 1; text-align: center; padding: 16px 0 14px; font: 700 16px var(--display); color: var(--dim); cursor: pointer; border-top: 3px solid transparent; margin-top: -1px; }
+        .tab-btn.active { color: var(--chalk); border-top-color: var(--red); }
+        .card { background: var(--steel); border-radius: 22px; padding: 16px; margin-bottom: 14px; }
+        #workoutForm { border-left: 5px solid var(--c); padding-left: 14px; margin: 0; }
+        select, input:not([type=range]), button { font: inherit; font-size: 17px; border: 0; border-radius: 14px; width: 100%; box-sizing: border-box; }
+        select, input:not([type=range]) { background: var(--steel2); color: var(--chalk); padding: 15px 14px; margin: 0 0 10px; }
+        select { -webkit-appearance: none; appearance: none; font-weight: 600;
+                 background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%2398a1ad' stroke-width='2'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+                 background-repeat: no-repeat; background-position: right 16px center; padding-right: 40px; }
+        ::placeholder { color: #6d7684; font-size: 15px; font-weight: 600; }
+        .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+        .pair input { font: 800 26px var(--display); text-align: center; padding: 14px 8px; margin: 0; }
+        .hint { margin: 0 0 12px; color: var(--dim); font-size: 13px; }
+        button { padding: 16px; background: var(--red); color: #fff; font-weight: 800; font-family: var(--display); transition: transform .08s; }
+        button:active { transform: scale(.97); }
+        .finish-btn { background: var(--green); color: #0f1a12; margin-top: 12px; }
+        .danger-btn { background: transparent; color: #ff6b6b; box-shadow: inset 0 0 0 1.5px rgba(255,107,107,.5); margin-top: 14px; }
+        .del-btn { width: auto; padding: 6px 11px; background: var(--steel); color: var(--dim); font-size: 14px; border-radius: 10px; }
+        .skip-btn { width: auto; padding: 10px 16px; background: var(--steel); }
+        .tutorial-btn { display: none; margin: 0 0 12px; color: var(--dim); font-size: 15px; text-decoration: none; }
+        .tutorial-btn::before { content: "\25B6\00a0"; color: var(--c); }
+        .rest-label { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; }
+        #restValue { font: 800 22px var(--display); }
+        input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 32px; background: transparent; margin: 8px 0 0; padding: 0; }
+        input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: var(--steel2); }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: var(--chalk); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+        .set { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 14px; margin-bottom: 8px; background: var(--steel2); border-radius: 14px; border-left: 5px solid var(--c); }
+        .set-n { font: 800 15px var(--display); color: var(--dim); min-width: 18px; }
+        .set-ex { flex: 1; font-weight: 600; }
+        .set-v { font: 800 18px var(--display); }
+        .empty { color: var(--dim); text-align: center; margin: 6px 0 4px; }
+        .timer-box { display: none; position: fixed; left: 16px; right: 16px; max-width: 528px; margin: 0 auto; z-index: 9; align-items: center; gap: 14px;
+                     bottom: calc(76px + env(safe-area-inset-bottom)); padding: 12px 14px; background: var(--steel2); border-radius: 26px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+        .ring { width: 64px; height: 64px; border-radius: 50%; flex: none; display: grid; place-items: center;
+                background: conic-gradient(var(--red) calc(var(--p, 100) * 1%), rgba(255,255,255,.1) 0); }
+        .ring-in { width: 50px; height: 50px; border-radius: 50%; background: var(--steel2); display: grid; place-items: center; font: 800 20px var(--display); font-variant-numeric: tabular-nums; }
+        .timer-txt { flex: 1; display: flex; flex-direction: column; font: 800 17px var(--display); }
+        .timer-txt span { color: var(--dim); font-weight: 500; font-size: 14px; }
+        .records { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 0; }
+        .rec { background: var(--steel2); border-radius: 14px; padding: 12px; }
+        .rec small { display: block; color: var(--dim); font-size: 13px; }
+        .rec b { display: block; font: 800 22px var(--display); margin: 2px 0; }
+        .rec em { font-style: normal; color: var(--dim); font-size: 13px; }
+        canvas { max-width: 100%; }
+        :focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+        @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    </style>
+</head>
+<body>
+
+    <h1>MyBenchmark</h1>
+
+    <div class="tabs">
+        <div class="tab-btn active" onclick="switchTab('session', this)">Sessione</div>
+        <div class="tab-btn" onclick="switchTab('stats', this)">Statistiche</div>
+    </div>
+
+    <!-- Tab Sessione -->
+    <div id="session" class="tab-content active">
+        <div id="timerBox" class="timer-box">
+            <div class="ring"><div class="ring-in"><span id="timer">60</span></div></div>
+            <div class="timer-txt">Recupero<span>secondi</span></div>
+            <button class="skip-btn" onclick="stopTimer()">Salta</button>
+        </div>
+        <div class="card">
+            <form id="workoutForm">
+                <select id="exercise" required onchange="updateTutorialLink()">
+                    <option value="" disabled selected>Esercizio...</option>
+                </select>
+
+                <a id="tutorialLink" href="#" target="_blank" rel="noopener" class="tutorial-btn">Guarda Tutorial su YouTube</a>
+
+                <div class="pair">
+                    <input type="number" id="reps" placeholder="Ripetizioni" inputmode="numeric" min="1" step="1" required>
+                    <input type="number" id="weight" placeholder="Kg" inputmode="decimal" min="0" step="any">
+                </div>
+                <p class="hint">Peso vuoto = corpo libero</p>
+                <button type="submit">Aggiungi serie</button>
+            </form>
+        </div>
+        <div class="card">
+            <div class="rest-label"><span>Tempo di recupero</span><span id="restValue">1 min</span></div>
+            <input type="range" id="restSlider" min="20" max="180" step="10" value="60">
+        </div>
+        <div class="card">
+            <p id="sessionEmpty" class="empty">Nessuna serie aggiunta.</p>
+            <div id="currentSessionTable"></div>
+            <button class="finish-btn" onclick="finishWorkout()">Termina workout</button>
+        </div>
+    </div>
+
+    <!-- Tab Statistiche -->
+    <div id="stats" class="tab-content">
+        <div class="card">
+            <select id="statExercise" onchange="renderStats()"></select>
+        </div>
+        <div class="card">
+            <p id="statsEmpty" class="empty" style="display:none;">Nessun dato per questo esercizio.</p>
+            <canvas id="myChart"></canvas>
+            <p id="records" class="records"></p>
+            <button class="danger-btn" onclick="clearHistory()">Cancella tutti i dati</button>
+        </div>
+    </div>
+
+    <script>
+        const HISTORY_KEY = 'benchmarkUltimate';
+        const SESSION_KEY = 'benchmarkUltimateCurrent';
+
+        function load(key) {
+            try {
+                const data = JSON.parse(localStorage.getItem(key));
+                return Array.isArray(data) ? data : [];
+            } catch (e) { return []; }
+        }
+        function save(key, value) {
+            try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+            catch (e) { return false; }
+        }
+
+        let historyData = load(HISTORY_KEY);
+        let currentSession = load(SESSION_KEY);   // la sessione in corso sopravvive a un ricaricamento
+        let myChart;
+        let timerInterval;
+
+        // Elenco esercizi: aggiungi o togli nomi qui e compaiono sia in Sessione sia in Statistiche.
+        // Attenzione: se rinomini un esercizio, lo storico salvato con il vecchio nome non viene più collegato.
+        const EXERCISES = {
+            'Gambe': ['Squat', 'Front Squat', 'Squat Bulgaro', 'Goblet Squat', 'Leg Press', 'Affondi', 'Stacco Rumeno', 'Hip Thrust', 'Leg Extension', 'Leg Curl', 'Calf Raise'],
+            'Petto': ['Panca Piana', 'Panca Inclinata', 'Spinte Manubri', 'Croci Cavi', 'Croci Manubri', 'Chest Press'],
+            'Dorso': ['Stacco da Terra', 'Lat Machine', 'Rematore', 'Rematore Manubrio', 'Trazioni', 'Pulley'],
+            'Spalle': ['Military Press', 'Lento Avanti Manubri', 'Arnold Press', 'Alzate Laterali', 'Alzate Posteriori', 'Face Pull', 'Shrug'],
+            'Braccia': ['Curl Bilanciere', 'Curl Manubri', 'Curl a Martello', 'Curl Panca Scott', 'French Press', 'Push Down Cavi', 'Estensioni Tricipiti Manubrio'],
+            'Pesistica olimpica': ['Strappo', 'Slancio', 'Girata al Petto', 'Push Press'],
+            'Corpo libero': ['Flessioni', 'Dip alle Parallele', 'Trazioni Presa Supina', 'Trazioni Australiane', 'Squat a Corpo Libero', 'Affondi Camminati', 'Pistol Squat', 'Flessioni Verticali', 'Muscle Up', 'Crunch', 'Sollevamento Gambe', 'Russian Twist', 'Ab Wheel', 'Burpees']
+        };
+
+        const exSelect = document.getElementById('exercise');
+        const statSelect = document.getElementById('statExercise');
+        Object.entries(EXERCISES).forEach(([group, names]) => {
+            [exSelect, statSelect].forEach(sel => {
+                const og = document.createElement('optgroup');
+                og.label = group;
+                names.forEach(name => {
+                    const o = document.createElement('option');
+                    o.value = name;
+                    o.textContent = name;
+                    o.dataset.yt = encodeURIComponent(name + ' tutorial ita');
+                    og.appendChild(o);
+                });
+                sel.appendChild(og);
+            });
+        });
+
+        // A corpo libero (0 kg) il volume conta le sole ripetizioni
+        function setVolume(s) { return s.reps * (s.weight > 0 ? s.weight : 1); }
+        function fmtSet(s) { return s.weight > 0 ? `${s.reps}x${s.weight}kg` : `${s.reps} rep`; }
+
+        // Ogni gruppo muscolare ha il colore di un disco da bilanciere: compare sulle serie e sul grafico
+        const GROUP_COLORS = { 'Gambe': '#e5383b', 'Petto': '#3b82f6', 'Dorso': '#f5c518', 'Spalle': '#34c759',
+                               'Braccia': '#ff8a3d', 'Pesistica olimpica': '#e9edf2', 'Corpo libero': '#a78bfa' };
+        const GROUP_OF = {};
+        Object.entries(EXERCISES).forEach(([g, names]) => names.forEach(n => GROUP_OF[n] = g));
+        function groupColor(name) { return GROUP_COLORS[GROUP_OF[name]] || '#98a1ad'; }
+
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+            if (tabId === 'stats') renderStats();   // il grafico va disegnato quando la tab è visibile
+        }
+
+        function updateTutorialLink() {
+            const option = exSelect.options[exSelect.selectedIndex];
+            const link = document.getElementById('tutorialLink');
+            document.getElementById('workoutForm').style.setProperty('--c', groupColor(option && option.value));
+            if (option && option.dataset.yt) {
+                link.href = `https://www.youtube.com/results?search_query=${option.dataset.yt}`;
+                link.style.display = 'block';
+            } else {
+                link.style.display = 'none';
+            }
+        }
+
+        // Recupero regolabile (20 s - 3 min, passi da 10 s), ricordato tra una sessione e l'altra
+        const REST_KEY = 'benchmarkUltimateRest';
+        const restSlider = document.getElementById('restSlider');
+        let restSeconds = 60;
+        try {
+            const saved = parseInt(localStorage.getItem(REST_KEY), 10);
+            if (saved >= 20 && saved <= 180) restSeconds = saved;
+        } catch (e) {}
+
+        function fmtRest(sec) {
+            const m = Math.floor(sec / 60), r = sec % 60;
+            return m ? (r ? `${m} min ${r} s` : `${m} min`) : `${r} s`;
+        }
+        restSlider.value = restSeconds;
+        document.getElementById('restValue').textContent = fmtRest(restSeconds);
+        restSlider.addEventListener('input', () => {
+            restSeconds = parseInt(restSlider.value, 10);
+            document.getElementById('restValue').textContent = fmtRest(restSeconds);
+            try { localStorage.setItem(REST_KEY, restSeconds); } catch (e) {}
+        });
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            document.getElementById('timerBox').style.display = 'none';
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            const box = document.getElementById('timerBox');
+            const label = document.getElementById('timer');
+            const total = restSeconds * 1000;
+            const end = Date.now() + total;   // basato sull'orologio: resta preciso anche se lo schermo si blocca
+            box.style.display = 'flex';
+            const tick = () => {
+                const ms = end - Date.now();
+                if (ms <= 0) return stopTimer();
+                label.textContent = Math.ceil(ms / 1000);
+                box.style.setProperty('--p', (ms / total * 100).toFixed(1));
+            };
+            tick();
+            timerInterval = setInterval(tick, 250);
+        }
+
+        function renderSession() {
+            const list = document.getElementById('currentSessionTable');
+            list.innerHTML = currentSession.map((s, i) =>
+                `<div class="set" style="--c:${groupColor(s.ex)}"><span class="set-n">${i + 1}</span>` +
+                `<span class="set-ex">${s.ex}</span><span class="set-v">${fmtSet(s)}</span>` +
+                `<button class="del-btn" onclick="removeSet(${i})">✕</button></div>`
+            ).join('');
+            document.getElementById('sessionEmpty').style.display = currentSession.length ? 'none' : 'block';
+        }
+
+        function removeSet(i) {
+            currentSession.splice(i, 1);
+            save(SESSION_KEY, currentSession);
+            renderSession();
+        }
+
+        document.getElementById('workoutForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const ex = exSelect.value;
+            const reps = parseInt(document.getElementById('reps').value, 10);
+            const weight = parseFloat(document.getElementById('weight').value) || 0;   // vuoto o 0 = corpo libero
+            if (!ex || !(reps > 0) || !(weight >= 0)) return;
+
+            currentSession.push({ ex, reps, weight, volume: reps * weight });
+            save(SESSION_KEY, currentSession);
+            renderSession();
+            startTimer();
+
+            // Tiene esercizio e peso, svuota solo le ripetizioni per la serie successiva
+            const repsInput = document.getElementById('reps');
+            repsInput.value = '';
+            repsInput.focus();
+        });
+
+        function finishWorkout() {
+            if (currentSession.length === 0) return;
+            const dateStr = new Date().toLocaleDateString('it-IT');
+            historyData.push({ date: dateStr, exercises: currentSession });
+            if (!save(HISTORY_KEY, historyData)) {
+                historyData.pop();
+                alert('Impossibile salvare: il browser blocca la memoria locale.');
+                return;
+            }
+            currentSession = [];
+            save(SESSION_KEY, currentSession);
+            renderSession();
+            clearInterval(timerInterval);
+            document.getElementById('timerBox').style.display = 'none';
+            alert('Salvato!');
+        }
+
+        function clearHistory() {
+            if (!confirm('Cancellare tutto lo storico? Non si può annullare.')) return;
+            historyData = [];
+            save(HISTORY_KEY, historyData);
+            renderStats();
+        }
+
+        function renderStats() {
+            const selectedEx = statSelect.value;
+            const days = new Map();   // data -> { total, bestVol, heaviest }
+
+            historyData.forEach(w => {
+                if (!Array.isArray(w.exercises)) return;
+                w.exercises.forEach(s => {
+                    if (s.ex !== selectedEx) return;
+                    const v = setVolume(s);
+                    const d = days.get(w.date) || { total: 0, bestVol: null, heaviest: null };
+                    d.total += v;
+                    if (!d.bestVol || v > setVolume(d.bestVol)) d.bestVol = s;
+                    if (!d.heaviest || s.weight > d.heaviest.weight ||
+                        (s.weight === d.heaviest.weight && s.reps > d.heaviest.reps)) d.heaviest = s;
+                    days.set(w.date, d);
+                });
+            });
+
+            const entries = Array.from(days.entries());
+            const labels = entries.map(e => e[0]);
+            const bestVol = entries.map(e => e[1].bestVol);
+            const heaviest = entries.map(e => e[1].heaviest);
+            const gc = groupColor(selectedEx);
+            const noWeight = heaviest.every(s => s.weight === 0);   // esercizio solo a corpo libero
+
+            document.getElementById('statsEmpty').style.display = entries.length ? 'none' : 'block';
+
+            // Record di sempre
+            const rec = document.getElementById('records');
+            if (entries.length) {
+                let bi = 0, hi = 0;
+                bestVol.forEach((s, i) => { if (setVolume(s) > setVolume(bestVol[bi])) bi = i; });
+                heaviest.forEach((s, i) => { if (s.weight > heaviest[hi].weight) hi = i; });
+                const tile = (t, st, d) => `<div class="rec"><small>${t}</small><b>${fmtSet(st)}</b><em>${d}</em></div>`;
+                rec.innerHTML = tile('Serie con più volume', bestVol[bi], labels[bi]) +
+                    (noWeight ? '' : tile('Peso più alto', heaviest[hi], labels[hi]));
+            } else {
+                rec.innerHTML = '';
+            }
+
+            if (myChart) myChart.destroy();
+            if (typeof Chart === 'undefined') return;   // libreria non caricata (nessuna connessione)
+            Chart.defaults.color = '#98a1ad';
+            Chart.defaults.borderColor = 'rgba(255,255,255,.08)';
+
+            myChart = new Chart(document.getElementById('myChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Serie con più volume', data: bestVol.map(setVolume), sets: bestVol,
+                          borderColor: gc, backgroundColor: gc, yAxisID: 'y', borderWidth: 2, tension: 0.2 },
+                        { label: 'Peso più alto', data: heaviest.map(s => s.weight), sets: heaviest,
+                          borderColor: '#f1f3f5', backgroundColor: '#f1f3f5', yAxisID: 'y1', borderWidth: 2, tension: 0.2, hidden: noWeight },
+                        { label: 'Volume totale', data: entries.map(e => e[1].total),
+                          borderColor: '#8e8e93', backgroundColor: '#8e8e93', yAxisID: 'y', borderWidth: 2, borderDash: [5, 5], tension: 0.2, hidden: true }
+                    ]
+                },
+                options: {
+                    interaction: { mode: 'nearest', intersect: false },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => {
+                                    const s = ctx.dataset.sets && ctx.dataset.sets[ctx.dataIndex];
+                                    return s ? `${ctx.dataset.label}: ${fmtSet(s)}` : `${ctx.dataset.label}: ${ctx.parsed.y}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y:  { display: 'auto', position: 'left', beginAtZero: true,
+                              title: { display: true, text: 'Volume' }, ticks: { color: gc } },
+                        y1: { display: 'auto', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
+                              title: { display: true, text: 'Peso (kg)' }, ticks: { color: '#f1f3f5' } }
+                    }
+                }
+            });
+        }
+
+        renderSession();
+
+        // Funzionamento offline: sw.js salva la pagina e il grafico sul telefono
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+        }
+    </script>
+</body>
+</html>
