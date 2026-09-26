@@ -1,4 +1,4 @@
-const CACHE = 'benchmark-v2';
+const CACHE = 'benchmark-v3';
 const CHART = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
 const LOCAL = ['./', 'index.html', 'manifest.json', 'icon.png'];
 

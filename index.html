@@ -71,6 +71,28 @@
         canvas { max-width: 100%; }
         :focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+        .toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 16px); transform: translateX(-50%) translateY(-16px);
+                 background: var(--chalk); color: #14171c; font: 800 15px var(--display); padding: 12px 18px; border-radius: 16px;
+                 box-shadow: 0 10px 24px rgba(0,0,0,.4); z-index: 20; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; text-align: center; max-width: 88%; }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .stack button { margin-top: 10px; }
+        .stack button:first-child { margin-top: 0; }
+        .secondary-btn { background: var(--steel2); color: var(--chalk); }
+        .ghost-btn { width: auto; padding: 12px 16px; background: var(--steel2); color: var(--dim); flex: none; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip { padding: 9px 14px; border-radius: 20px; background: var(--steel2); font-weight: 700; font-size: 14px; cursor: pointer; border: 2px solid var(--c); }
+        .chip.done { opacity: .4; }
+        .chip.active { background: var(--c); color: #14171c; }
+        .routine-bar-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font: 800 16px var(--display); }
+        .routine-title { margin: 0 0 6px; font: 800 18px var(--display); }
+        .routine-exlist { margin: 0 0 12px; color: var(--dim); font-size: 14px; }
+        .routine-actions { display: flex; gap: 8px; }
+        .routine-actions button:first-child { flex: 1; }
+        .checklist { max-height: 280px; overflow-y: auto; margin: 10px 0; -webkit-overflow-scrolling: touch; }
+        .checklist h4 { margin: 14px 0 6px; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+        .checklist h4:first-child { margin-top: 0; }
+        .checklist label { display: flex; align-items: center; gap: 10px; padding: 9px 2px; font-size: 15px; border-bottom: 1px solid rgba(255,255,255,.06); }
+        .checklist input[type=checkbox] { width: auto; height: 20px; accent-color: var(--red); flex: none; }
     </style>
 </head>
 <body>
@@ -78,9 +100,11 @@
     <h1>MyBenchmark</h1>
 
     <div class="tabs">
-        <div class="tab-btn active" onclick="switchTab('session', this)">Sessione</div>
-        <div class="tab-btn" onclick="switchTab('stats', this)">Statistiche</div>
+        <div class="tab-btn active" data-tab="session" onclick="switchTab('session')">Sessione</div>
+        <div class="tab-btn" data-tab="stats" onclick="switchTab('stats')">Statistiche</div>
+        <div class="tab-btn" data-tab="routines" onclick="switchTab('routines')">Schede</div>
     </div>
+    <div id="toast" class="toast"></div>
 
     <!-- Tab Sessione -->
     <div id="session" class="tab-content active">
@@ -88,6 +112,10 @@
             <div class="ring"><div class="ring-in"><span id="timer">60</span></div></div>
             <div class="timer-txt">Recupero<span>secondi</span></div>
             <button class="skip-btn" onclick="stopTimer()">Salta</button>
+        </div>
+        <div id="activeRoutineBar" class="card" style="display:none">
+            <div class="routine-bar-head"><span id="activeRoutineName"></span><button class="ghost-btn" onclick="clearActiveRoutine()">Chiudi</button></div>
+            <div id="activeRoutineChips" class="chips"></div>
         </div>
         <div class="card">
             <form id="workoutForm">
@@ -127,6 +155,24 @@
             <p id="records" class="records"></p>
             <button class="danger-btn" onclick="clearHistory()">Cancella tutti i dati</button>
         </div>
+        <div class="card stack">
+            <button class="secondary-btn" onclick="exportData()">Esporta dati</button>
+            <button class="secondary-btn" onclick="document.getElementById('importFile').click()">Importa dati</button>
+            <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(this.files[0])">
+        </div>
+    </div>
+
+    <!-- Tab Schede -->
+    <div id="routines" class="tab-content">
+        <div class="card">
+            <button onclick="toggleRoutineForm()">+ Nuova scheda</button>
+            <div id="routineForm" style="display:none; margin-top:14px;">
+                <input type="text" id="routineName" placeholder="Nome scheda (es. Push Day)">
+                <div id="routineCheckboxes" class="checklist"></div>
+                <button class="finish-btn" onclick="saveRoutine()">Salva scheda</button>
+            </div>
+        </div>
+        <div id="routineList"></div>
     </div>
 
     <script>
@@ -189,12 +235,13 @@
         Object.entries(EXERCISES).forEach(([g, names]) => names.forEach(n => GROUP_OF[n] = g));
         function groupColor(name) { return GROUP_COLORS[GROUP_OF[name]] || '#98a1ad'; }
 
-        function switchTab(tabId, btn) {
+        function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
-            btn.classList.add('active');
+            document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
             if (tabId === 'stats') renderStats();   // il grafico va disegnato quando la tab è visibile
+            if (tabId === 'routines') renderRoutinesTab();
         }
 
         function updateTutorialLink() {
@@ -207,6 +254,7 @@
             } else {
                 link.style.display = 'none';
             }
+            renderActiveRoutineBar();
         }
 
         // Recupero regolabile (20 s - 3 min, passi da 10 s), ricordato tra una sessione e l'altra
@@ -230,6 +278,170 @@
             try { localStorage.setItem(REST_KEY, restSeconds); } catch (e) {}
         });
 
+        // Suono e vibrazione a fine recupero (l'audio va sbloccato da un tocco, qui quello che invia la serie)
+        let audioCtx = null;
+        function unlockAudio() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                else if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {}
+        }
+        function playRestEndSound() {
+            if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }   // su iPhone Safari non ha effetto: non supporta la vibrazione
+            if (!audioCtx) return;
+            try {
+                const t0 = audioCtx.currentTime;
+                [0, 0.16].forEach(off => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine'; osc.frequency.value = 880;
+                    gain.gain.setValueAtTime(0.0001, t0 + off);
+                    gain.gain.exponentialRampToValueAtTime(0.35, t0 + off + 0.01);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.14);
+                    osc.connect(gain).connect(audioCtx.destination);
+                    osc.start(t0 + off); osc.stop(t0 + off + 0.15);
+                });
+            } catch (e) {}
+        }
+
+        // Notifica quando una serie batte un record precedente (confronto con lo storico salvato)
+        let toastTimer;
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            clearTimeout(toastTimer);
+            t.classList.add('show');
+            toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+        }
+        function checkPR(newSet) {
+            let maxWeight = 0, maxVol = 0, seen = false;
+            historyData.forEach(w => {
+                if (!Array.isArray(w.exercises)) return;
+                w.exercises.forEach(s => {
+                    if (s.ex !== newSet.ex) return;
+                    seen = true;
+                    if (s.weight > maxWeight) maxWeight = s.weight;
+                    const v = setVolume(s);
+                    if (v > maxVol) maxVol = v;
+                });
+            });
+            if (!seen) return [];
+            const hits = [];
+            if (newSet.weight > 0 && newSet.weight > maxWeight) hits.push('peso');
+            if (setVolume(newSet) > maxVol) hits.push('volume');
+            return hits;
+        }
+
+        // Schede di allenamento: gruppi di esercizi salvati, richiamabili in Sessione come scorciatoie
+        const ROUTINES_KEY = 'benchmarkUltimateRoutines';
+        const ACTIVE_ROUTINE_KEY = 'benchmarkUltimateActiveRoutine';
+        let routines = load(ROUTINES_KEY);
+        let activeRoutineId = null;
+        try { activeRoutineId = localStorage.getItem(ACTIVE_ROUTINE_KEY) || null; } catch (e) {}
+
+        function toggleRoutineForm() {
+            const f = document.getElementById('routineForm');
+            const opening = f.style.display === 'none';
+            f.style.display = opening ? 'block' : 'none';
+            if (opening) {
+                document.getElementById('routineName').value = '';
+                document.getElementById('routineCheckboxes').innerHTML = Object.entries(EXERCISES).map(([group, names]) =>
+                    `<h4>${group}</h4>` + names.map(n => `<label><input type="checkbox" value="${n}">${n}</label>`).join('')
+                ).join('');
+            }
+        }
+
+        function saveRoutine() {
+            const name = document.getElementById('routineName').value.trim();
+            const checked = Array.from(document.querySelectorAll('#routineCheckboxes input:checked')).map(c => c.value);
+            if (!name || !checked.length) { alert('Dai un nome alla scheda e scegli almeno un esercizio.'); return; }
+            routines.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, exercises: checked });
+            save(ROUTINES_KEY, routines);
+            toggleRoutineForm();
+            renderRoutinesTab();
+        }
+
+        function deleteRoutine(id) {
+            if (!confirm('Eliminare questa scheda?')) return;
+            routines = routines.filter(r => r.id !== id);
+            save(ROUTINES_KEY, routines);
+            if (activeRoutineId === id) clearActiveRoutine(); else renderRoutinesTab();
+        }
+
+        function useRoutine(id) {
+            activeRoutineId = id;
+            try { localStorage.setItem(ACTIVE_ROUTINE_KEY, id); } catch (e) {}
+            switchTab('session');
+            renderActiveRoutineBar();
+        }
+
+        function clearActiveRoutine() {
+            activeRoutineId = null;
+            try { localStorage.removeItem(ACTIVE_ROUTINE_KEY); } catch (e) {}
+            renderRoutinesTab();
+            renderActiveRoutineBar();
+        }
+
+        function renderRoutinesTab() {
+            const list = document.getElementById('routineList');
+            if (!routines.length) { list.innerHTML = '<p class="empty">Nessuna scheda salvata.</p>'; return; }
+            list.innerHTML = routines.map(r => `
+                <div class="card">
+                    <h3 class="routine-title">${r.name}</h3>
+                    <p class="routine-exlist">${r.exercises.join(' · ')}</p>
+                    <div class="routine-actions">
+                        <button onclick="useRoutine('${r.id}')">Usa in sessione</button>
+                        <button class="ghost-btn" onclick="deleteRoutine('${r.id}')">Elimina</button>
+                    </div>
+                </div>`).join('');
+        }
+
+        function pickExercise(name) {
+            exSelect.value = name;
+            updateTutorialLink();
+        }
+
+        function renderActiveRoutineBar() {
+            const bar = document.getElementById('activeRoutineBar');
+            const r = routines.find(r => r.id === activeRoutineId);
+            if (!r) { bar.style.display = 'none'; return; }
+            bar.style.display = 'block';
+            document.getElementById('activeRoutineName').textContent = r.name;
+            const done = new Set(currentSession.map(s => s.ex));
+            document.getElementById('activeRoutineChips').innerHTML = r.exercises.map(name => {
+                const cls = ['chip', done.has(name) ? 'done' : '', exSelect.value === name ? 'active' : ''].filter(Boolean).join(' ');
+                return `<div class="${cls}" style="--c:${groupColor(name)}" onclick="pickExercise('${name.replace(/'/g, "\\'")}')">${name}</div>`;
+            }).join('');
+        }
+
+        // Backup: esporta tutto in un file JSON, o ripristina da un file esportato in precedenza
+        function exportData() {
+            const backup = { exportedAt: new Date().toISOString(), history: historyData, routines: routines, restSeconds: restSeconds };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `benchmark-backup-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function importData(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                let data;
+                try { data = JSON.parse(reader.result); } catch (e) { alert('File non valido.'); return; }
+                if (!Array.isArray(data.history)) { alert('File non valido.'); return; }
+                if (!confirm('Sostituire tutti i dati attuali con quelli del backup?')) return;
+                save(HISTORY_KEY, data.history);
+                save(ROUTINES_KEY, Array.isArray(data.routines) ? data.routines : []);
+                if (typeof data.restSeconds === 'number') { try { localStorage.setItem(REST_KEY, data.restSeconds); } catch (e) {} }
+                location.reload();
+            };
+            reader.readAsText(file);
+            document.getElementById('importFile').value = '';
+        }
+
         function stopTimer() {
             clearInterval(timerInterval);
             document.getElementById('timerBox').style.display = 'none';
@@ -244,7 +456,7 @@
             box.style.display = 'flex';
             const tick = () => {
                 const ms = end - Date.now();
-                if (ms <= 0) return stopTimer();
+                if (ms <= 0) { stopTimer(); playRestEndSound(); return; }
                 label.textContent = Math.ceil(ms / 1000);
                 box.style.setProperty('--p', (ms / total * 100).toFixed(1));
             };
@@ -266,6 +478,7 @@
             currentSession.splice(i, 1);
             save(SESSION_KEY, currentSession);
             renderSession();
+            renderActiveRoutineBar();
         }
 
         document.getElementById('workoutForm').addEventListener('submit', function (e) {
@@ -275,10 +488,17 @@
             const weight = parseFloat(document.getElementById('weight').value) || 0;   // vuoto o 0 = corpo libero
             if (!ex || !(reps > 0) || !(weight >= 0)) return;
 
-            currentSession.push({ ex, reps, weight, volume: reps * weight });
+            const newSet = { ex, reps, weight, volume: reps * weight };
+            const prHits = checkPR(newSet);
+
+            currentSession.push(newSet);
             save(SESSION_KEY, currentSession);
             renderSession();
+            renderActiveRoutineBar();
+            unlockAudio();
             startTimer();
+
+            if (prHits.length) showToast(`🏆 Nuovo record di ${prHits.join(' e ')} — ${ex}`);
 
             // Tiene esercizio e peso, svuota solo le ripetizioni per la serie successiva
             const repsInput = document.getElementById('reps');
@@ -298,6 +518,7 @@
             currentSession = [];
             save(SESSION_KEY, currentSession);
             renderSession();
+            renderActiveRoutineBar();
             clearInterval(timerInterval);
             document.getElementById('timerBox').style.display = 'none';
             alert('Salvato!');
@@ -391,6 +612,8 @@
         }
 
         renderSession();
+        renderRoutinesTab();
+        renderActiveRoutineBar();
 
         // Funzionamento offline: sw.js salva la pagina e il grafico sul telefono
         if ('serviceWorker' in navigator) {
