@@ -567,29 +567,39 @@
             return new Date(year, month - 1, day, 12);   // mezzogiorno: evita scivolamenti di fuso orario
         }
 
+        // Soglie di serie settimanali per gruppo muscolare (MEV = confine giallo->arancione, cima del MAV = confine arancione->rosso).
+        // Punti di partenza di popolazione (Renaissance Periodization), non personalizzati: buoni per un livello intermedio medio.
+        const MUSCLE_THRESHOLDS = {
+            'Gambe':   { mev: 6, mavTop: 16 },
+            'Petto':   { mev: 8, mavTop: 18 },
+            'Dorso':   { mev: 7, mavTop: 18 },
+            'Spalle':  { mev: 6, mavTop: 16 },
+            'Braccia': { mev: 6, mavTop: 14 },
+            'Core':    { mev: 4, mavTop: 14 }
+        };
+
         function renderMuscleHeat() {
             const grid = document.getElementById('muscleHeatGrid');
             if (!grid) return;
             const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
-            const load = Object.fromEntries(MUSCLE_GROUPS.map(g => [g, 0]));
+            const sets = Object.fromEntries(MUSCLE_GROUPS.map(g => [g, 0]));
 
             historyData.forEach(w => {
                 if (!Array.isArray(w.exercises) || parseItDate(w.date).getTime() < since) return;
                 w.exercises.forEach(s => {
                     const g = MUSCLE_OF[s.ex];
-                    if (g) load[g] += setVolume(s);
+                    if (g) sets[g]++;   // ogni serie conta 1, indipendentemente dal peso: contano le serie, non il volume
                 });
             });
 
-            const max = Math.max(...Object.values(load), 1);   // evita divisioni per zero quando è tutto vuoto
             grid.innerHTML = MUSCLE_GROUPS.map(g => {
-                const v = load[g];
-                const ratio = v / max;
+                const n = sets[g];
+                const { mev, mavTop } = MUSCLE_THRESHOLDS[g];
                 let tier = 'green', label = 'Riposato';
-                if (v > 0) {
-                    if (ratio > 0.66) { tier = 'red'; label = 'Allenato tanto'; }
-                    else if (ratio > 0.33) { tier = 'orange'; label = 'Allenato'; }
-                    else { tier = 'yellow'; label = 'Allenato poco'; }
+                if (n > 0) {
+                    if (n > mavTop) { tier = 'red'; label = `Molto allenato · ${n}`; }
+                    else if (n >= mev) { tier = 'orange'; label = `Volume adeguato · ${n}`; }
+                    else { tier = 'yellow'; label = `Sotto la soglia · ${n}`; }
                 }
                 return `<div class="mh-pill mh-${tier}">${g}<small>${label}</small></div>`;
             }).join('');
