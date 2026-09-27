@@ -93,6 +93,15 @@
         .checklist h4:first-child { margin-top: 0; }
         .checklist label { display: flex; align-items: center; gap: 10px; padding: 9px 2px; font-size: 15px; border-bottom: 1px solid rgba(255,255,255,.06); }
         .checklist input[type=checkbox] { width: auto; height: 20px; accent-color: var(--red); flex: none; }
+        .mh-head { display: flex; justify-content: space-between; align-items: baseline; font: 800 15px var(--display); margin-bottom: 10px; }
+        .mh-sub { font-weight: 500; font-size: 12px; color: var(--dim); }
+        .mh-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .mh-pill { border-radius: 14px; padding: 10px 6px; text-align: center; font-weight: 800; font-size: 13px; color: #14171c; }
+        .mh-pill small { display: block; font-weight: 600; font-size: 11px; margin-top: 3px; opacity: .8; }
+        .mh-green  { background: var(--green); }
+        .mh-yellow { background: #ffd60a; }
+        .mh-orange { background: #ff9500; color: #fff; }
+        .mh-red    { background: var(--red); color: #fff; }
     </style>
 </head>
 <body>
@@ -108,6 +117,10 @@
 
     <!-- Tab Sessione -->
     <div id="session" class="tab-content active">
+        <div class="card">
+            <div class="mh-head">Carico recente<span class="mh-sub">ultimi 7 giorni</span></div>
+            <div id="muscleHeatGrid" class="mh-grid"></div>
+        </div>
         <div id="timerBox" class="timer-box">
             <div class="ring"><div class="ring-in"><span id="timer">60</span></div></div>
             <div class="timer-txt">Recupero<span>secondi</span></div>
@@ -519,9 +532,67 @@
             save(SESSION_KEY, currentSession);
             renderSession();
             renderActiveRoutineBar();
+            renderMuscleHeat();
             clearInterval(timerInterval);
             document.getElementById('timerBox').style.display = 'none';
             alert('Salvato!');
+        }
+
+        // Carico recente per gruppo muscolare, per capire cosa allenare nella prossima sessione.
+        // Mappatura indipendente dalle categorie EXERCISES (quelle raggruppano per tipo di movimento, questa per muscolo coinvolto).
+        const MUSCLE_GROUPS = ['Gambe', 'Petto', 'Dorso', 'Spalle', 'Braccia', 'Core'];
+        const MUSCLE_OF = {
+            'Squat': 'Gambe', 'Front Squat': 'Gambe', 'Squat Bulgaro': 'Gambe', 'Goblet Squat': 'Gambe',
+            'Leg Press': 'Gambe', 'Affondi': 'Gambe', 'Stacco Rumeno': 'Gambe', 'Hip Thrust': 'Gambe',
+            'Leg Extension': 'Gambe', 'Leg Curl': 'Gambe', 'Calf Raise': 'Gambe',
+            'Panca Piana': 'Petto', 'Panca Inclinata': 'Petto', 'Spinte Manubri': 'Petto', 'Croci Cavi': 'Petto',
+            'Croci Manubri': 'Petto', 'Chest Press': 'Petto',
+            'Stacco da Terra': 'Dorso', 'Lat Machine': 'Dorso', 'Rematore': 'Dorso', 'Rematore Manubrio': 'Dorso',
+            'Trazioni': 'Dorso', 'Pulley': 'Dorso',
+            'Military Press': 'Spalle', 'Lento Avanti Manubri': 'Spalle', 'Arnold Press': 'Spalle',
+            'Alzate Laterali': 'Spalle', 'Alzate Posteriori': 'Spalle', 'Face Pull': 'Spalle', 'Shrug': 'Spalle',
+            'Curl Bilanciere': 'Braccia', 'Curl Manubri': 'Braccia', 'Curl a Martello': 'Braccia',
+            'Curl Panca Scott': 'Braccia', 'French Press': 'Braccia', 'Push Down Cavi': 'Braccia',
+            'Estensioni Tricipiti Manubrio': 'Braccia',
+            'Strappo': 'Gambe', 'Slancio': 'Gambe', 'Girata al Petto': 'Gambe', 'Push Press': 'Spalle',
+            'Flessioni': 'Petto', 'Dip alle Parallele': 'Petto', 'Trazioni Presa Supina': 'Dorso',
+            'Trazioni Australiane': 'Dorso', 'Squat a Corpo Libero': 'Gambe', 'Affondi Camminati': 'Gambe',
+            'Pistol Squat': 'Gambe', 'Flessioni Verticali': 'Spalle', 'Muscle Up': 'Dorso',
+            'Crunch': 'Core', 'Sollevamento Gambe': 'Core', 'Russian Twist': 'Core', 'Ab Wheel': 'Core',
+            'Burpees': 'Gambe'
+        };
+
+        function parseItDate(d) {
+            const [day, month, year] = d.split('/').map(Number);
+            return new Date(year, month - 1, day, 12);   // mezzogiorno: evita scivolamenti di fuso orario
+        }
+
+        function renderMuscleHeat() {
+            const grid = document.getElementById('muscleHeatGrid');
+            if (!grid) return;
+            const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const load = Object.fromEntries(MUSCLE_GROUPS.map(g => [g, 0]));
+
+            historyData.forEach(w => {
+                if (!Array.isArray(w.exercises) || parseItDate(w.date).getTime() < since) return;
+                w.exercises.forEach(s => {
+                    const g = MUSCLE_OF[s.ex];
+                    if (g) load[g] += setVolume(s);
+                });
+            });
+
+            const max = Math.max(...Object.values(load), 1);   // evita divisioni per zero quando è tutto vuoto
+            grid.innerHTML = MUSCLE_GROUPS.map(g => {
+                const v = load[g];
+                const ratio = v / max;
+                let tier = 'green', label = 'Riposato';
+                if (v > 0) {
+                    if (ratio > 0.66) { tier = 'red'; label = 'Allenato tanto'; }
+                    else if (ratio > 0.33) { tier = 'orange'; label = 'Allenato'; }
+                    else { tier = 'yellow'; label = 'Allenato poco'; }
+                }
+                return `<div class="mh-pill mh-${tier}">${g}<small>${label}</small></div>`;
+            }).join('');
         }
 
         function clearHistory() {
@@ -529,6 +600,7 @@
             historyData = [];
             save(HISTORY_KEY, historyData);
             renderStats();
+            renderMuscleHeat();
         }
 
         function renderStats() {
@@ -614,6 +686,7 @@
         renderSession();
         renderRoutinesTab();
         renderActiveRoutineBar();
+        renderMuscleHeat();
 
         // Funzionamento offline: sw.js salva la pagina e il grafico sul telefono
         if ('serviceWorker' in navigator) {
