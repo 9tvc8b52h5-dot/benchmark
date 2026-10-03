@@ -102,6 +102,18 @@
         .mh-yellow { background: #ffd60a; }
         .mh-orange { background: #ff9500; color: #fff; }
         .mh-red    { background: var(--red); color: #fff; }
+        .ex-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 2px; border-bottom: 1px solid rgba(255,255,255,.06); }
+        .ex-row label { display: flex; align-items: center; gap: 10px; flex: 1; font-size: 15px; }
+        .ex-row input[type=checkbox] { width: auto; height: 20px; accent-color: var(--red); flex: none; }
+        .sets-input { display: none; width: 50px; flex: none; padding: 6px 4px; text-align: center; font-weight: 800; background: var(--steel); margin: 0; }
+        .ex-row.checked .sets-input { display: block; }
+        .routine-steps { display: flex; flex-direction: column; gap: 8px; }
+        .routine-step { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 14px; background: var(--steel2); border-left: 4px solid var(--c); cursor: pointer; }
+        .routine-step.active { box-shadow: 0 0 0 2px var(--c) inset; }
+        .routine-step.done { opacity: .45; }
+        .rs-n { font: 800 13px var(--display); color: var(--dim); width: 16px; flex: none; }
+        .rs-name { flex: 1; font-weight: 700; font-size: 15px; }
+        .rs-progress { font: 800 13px var(--display); color: var(--dim); flex: none; }
     </style>
 </head>
 <body>
@@ -128,7 +140,7 @@
         </div>
         <div id="activeRoutineBar" class="card" style="display:none">
             <div class="routine-bar-head"><span id="activeRoutineName"></span><button class="ghost-btn" onclick="clearActiveRoutine()">Chiudi</button></div>
-            <div id="activeRoutineChips" class="chips"></div>
+            <div id="activeRoutineChips" class="routine-steps"></div>
         </div>
         <div class="card">
             <form id="workoutForm">
@@ -184,6 +196,11 @@
                 <div id="routineCheckboxes" class="checklist"></div>
                 <button class="finish-btn" onclick="saveRoutine()">Salva scheda</button>
             </div>
+        </div>
+        <div class="card stack">
+            <button class="secondary-btn" onclick="exportRoutines()">Esporta schede</button>
+            <button class="secondary-btn" onclick="document.getElementById('importRoutinesFile').click()">Importa schede</button>
+            <input type="file" id="importRoutinesFile" accept="application/json" style="display:none" onchange="importRoutines(this.files[0])">
         </div>
         <div id="routineList"></div>
     </div>
@@ -352,23 +369,52 @@
         let activeRoutineId = null;
         try { activeRoutineId = localStorage.getItem(ACTIVE_ROUTINE_KEY) || null; } catch (e) {}
 
+        // L'ordine in cui spunti gli esercizi diventa l'ordine della scheda (niente drag-and-drop)
+        let routineOrder = [];
+
+        function onRoutineCheck(checkbox) {
+            const row = checkbox.closest('.ex-row');
+            const name = checkbox.value;
+            row.classList.toggle('checked', checkbox.checked);
+            if (checkbox.checked) {
+                if (!routineOrder.includes(name)) routineOrder.push(name);
+            } else {
+                routineOrder = routineOrder.filter(n => n !== name);
+            }
+        }
+
         function toggleRoutineForm() {
             const f = document.getElementById('routineForm');
             const opening = f.style.display === 'none';
             f.style.display = opening ? 'block' : 'none';
             if (opening) {
                 document.getElementById('routineName').value = '';
+                routineOrder = [];
                 document.getElementById('routineCheckboxes').innerHTML = Object.entries(EXERCISES).map(([group, names]) =>
-                    `<h4>${group}</h4>` + names.map(n => `<label><input type="checkbox" value="${n}">${n}</label>`).join('')
+                    `<h4>${group}</h4>` + names.map(n => `
+                        <div class="ex-row" data-name="${n}">
+                            <label><input type="checkbox" value="${n}" onchange="onRoutineCheck(this)">${n}</label>
+                            <input type="number" class="sets-input" value="3" min="1" max="10" inputmode="numeric">
+                        </div>`).join('')
                 ).join('');
             }
         }
 
+        // Un esercizio di scheda è { name, sets }; queste due funzioni leggono anche il vecchio formato
+        // (una stringa nuda, da quando le schede non avevano un target di serie), così le schede salvate prima restano valide.
+        function exName(item) { return typeof item === 'string' ? item : item.name; }
+        function exSets(item) { return typeof item === 'string' ? null : item.sets; }
+
         function saveRoutine() {
             const name = document.getElementById('routineName').value.trim();
-            const checked = Array.from(document.querySelectorAll('#routineCheckboxes input:checked')).map(c => c.value);
-            if (!name || !checked.length) { alert('Dai un nome alla scheda e scegli almeno un esercizio.'); return; }
-            routines.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, exercises: checked });
+            if (!name || !routineOrder.length) { alert('Dai un nome alla scheda e scegli almeno un esercizio.'); return; }
+            const exercises = routineOrder.map(n => {
+                const row = document.querySelector(`.ex-row[data-name="${CSS.escape(n)}"]`);
+                const input = row ? row.querySelector('.sets-input') : null;
+                const sets = input ? Math.max(1, parseInt(input.value, 10) || 3) : 3;
+                return { name: n, sets };
+            });
+            routines.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, exercises });
             save(ROUTINES_KEY, routines);
             toggleRoutineForm();
             renderRoutinesTab();
@@ -401,7 +447,7 @@
             list.innerHTML = routines.map(r => `
                 <div class="card">
                     <h3 class="routine-title">${r.name}</h3>
-                    <p class="routine-exlist">${r.exercises.join(' · ')}</p>
+                    <p class="routine-exlist">${r.exercises.map(it => exSets(it) ? `${exName(it)} (${exSets(it)}x)` : exName(it)).join(' · ')}</p>
                     <div class="routine-actions">
                         <button onclick="useRoutine('${r.id}')">Usa in sessione</button>
                         <button class="ghost-btn" onclick="deleteRoutine('${r.id}')">Elimina</button>
@@ -420,11 +466,53 @@
             if (!r) { bar.style.display = 'none'; return; }
             bar.style.display = 'block';
             document.getElementById('activeRoutineName').textContent = r.name;
-            const done = new Set(currentSession.map(s => s.ex));
-            document.getElementById('activeRoutineChips').innerHTML = r.exercises.map(name => {
-                const cls = ['chip', done.has(name) ? 'done' : '', exSelect.value === name ? 'active' : ''].filter(Boolean).join(' ');
-                return `<div class="${cls}" style="--c:${groupColor(name)}" onclick="pickExercise('${name.replace(/'/g, "\\'")}')">${name}</div>`;
+            document.getElementById('activeRoutineChips').innerHTML = r.exercises.map((item, i) => {
+                const name = exName(item);
+                const target = exSets(item);
+                const done = currentSession.filter(s => s.ex === name).length;
+                const isDone = target ? done >= target : done > 0;
+                const cls = ['routine-step', isDone ? 'done' : '', exSelect.value === name ? 'active' : ''].filter(Boolean).join(' ');
+                const progress = target ? `${done}/${target}` : (done ? '✓' : '');
+                return `<div class="${cls}" style="--c:${groupColor(name)}" onclick="pickExercise('${name.replace(/'/g, "\\'")}')">` +
+                       `<span class="rs-n">${i + 1}</span><span class="rs-name">${name}</span><span class="rs-progress">${progress}</span></div>`;
             }).join('');
+        }
+
+        // Esporta/importa solo le schede (separato dal backup completo): comodo per aggiungerne di nuove
+        // senza toccare lo storico allenamenti, e senza il prompt "sostituire tutti i dati".
+        function exportRoutines() {
+            const blob = new Blob([JSON.stringify({ routines }, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `benchmark-schede-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function importRoutines(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                let data;
+                try { data = JSON.parse(reader.result); } catch (e) { alert('File non valido.'); return; }
+                const incoming = Array.isArray(data.routines) ? data.routines : (Array.isArray(data) ? data : null);
+                if (!incoming) { alert('File non valido: non contiene schede.'); return; }
+                let added = 0;
+                incoming.forEach(r => {
+                    if (!r || !r.name || !Array.isArray(r.exercises) || !r.exercises.length) return;
+                    routines.push({
+                        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + added,
+                        name: r.name,
+                        exercises: r.exercises.map(it => typeof it === 'string' ? { name: it, sets: 3 } : { name: it.name, sets: it.sets || 3 })
+                    });
+                    added++;
+                });
+                save(ROUTINES_KEY, routines);
+                renderRoutinesTab();
+                showToast(added ? `${added} sched${added === 1 ? 'a aggiunta' : 'e aggiunte'}` : 'Nessuna scheda valida nel file');
+            };
+            reader.readAsText(file);
+            document.getElementById('importRoutinesFile').value = '';
         }
 
         // Backup: esporta tutto in un file JSON, o ripristina da un file esportato in precedenza
