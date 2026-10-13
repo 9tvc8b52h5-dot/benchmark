@@ -56,8 +56,8 @@
         .set-ex { flex: 1; font-weight: 600; }
         .set-v { font: 800 18px var(--display); }
         .empty { color: var(--dim); text-align: center; margin: 6px 0 4px; }
-        .timer-box { display: none; position: fixed; left: 16px; right: 16px; max-width: 528px; margin: 0 auto; z-index: 9; align-items: center; gap: 14px;
-                     bottom: calc(76px + env(safe-area-inset-bottom)); padding: 12px 14px; background: var(--steel2); border-radius: 26px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+        .timer-box { display: none; position: fixed; left: 16px; right: 16px; max-width: 528px; margin: 0 auto; z-index: 20; align-items: center; gap: 14px;
+                     top: calc(env(safe-area-inset-top) + 12px); padding: 12px 14px; background: var(--steel2); border-radius: 26px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
         .ring { width: 64px; height: 64px; border-radius: 50%; flex: none; display: grid; place-items: center;
                 background: conic-gradient(var(--red) calc(var(--p, 100) * 1%), rgba(255,255,255,.1) 0); }
         .ring-in { width: 50px; height: 50px; border-radius: 50%; background: var(--steel2); display: grid; place-items: center; font: 800 20px var(--display); font-variant-numeric: tabular-nums; }
@@ -149,6 +149,7 @@
                 </select>
 
                 <a id="tutorialLink" href="#" target="_blank" rel="noopener" class="tutorial-btn">Guarda Tutorial su YouTube</a>
+                <p id="lastTimeHint" class="hint" style="display:none"></p>
 
                 <div class="pair">
                     <input type="number" id="reps" placeholder="Ripetizioni" inputmode="numeric" min="1" step="1" required>
@@ -274,15 +275,43 @@
             if (tabId === 'routines') renderRoutinesTab();
         }
 
+        // Cerca, a ritroso nello storico, l'ultima sessione in cui compare questo esercizio
+        // e restituisce la sua serie con più volume (non il record assoluto: quella usata l'ultima volta).
+        function lastSessionBestSet(exerciseName) {
+            for (let i = historyData.length - 1; i >= 0; i--) {
+                const w = historyData[i];
+                if (!Array.isArray(w.exercises)) continue;
+                const sets = w.exercises.filter(s => s.ex === exerciseName);
+                if (sets.length) {
+                    let best = sets[0];
+                    sets.forEach(s => { if (setVolume(s) > setVolume(best)) best = s; });
+                    return { set: best, date: w.date };
+                }
+            }
+            return null;
+        }
+
         function updateTutorialLink() {
             const option = exSelect.options[exSelect.selectedIndex];
             const link = document.getElementById('tutorialLink');
+            const hint = document.getElementById('lastTimeHint');
             document.getElementById('workoutForm').style.setProperty('--c', groupColor(option && option.value));
             if (option && option.dataset.yt) {
                 link.href = `https://www.youtube.com/results?search_query=${option.dataset.yt}`;
                 link.style.display = 'block';
             } else {
                 link.style.display = 'none';
+            }
+
+            const last = option && option.value ? lastSessionBestSet(option.value) : null;
+            if (last) {
+                hint.textContent = `Ultima volta: ${fmtSet(last.set)} (${last.date})`;
+                hint.style.display = 'block';
+                // Precompila con quella serie: è un punto di partenza da correggere, non un invio automatico
+                document.getElementById('reps').value = last.set.reps;
+                document.getElementById('weight').value = last.set.weight > 0 ? last.set.weight : '';
+            } else {
+                hint.style.display = 'none';
             }
             renderActiveRoutineBar();
         }
@@ -609,6 +638,7 @@
 
         function finishWorkout() {
             if (currentSession.length === 0) return;
+            if (!confirm(`Terminare il workout con ${currentSession.length} serie?`)) return;
             const dateStr = new Date().toLocaleDateString('it-IT');
             historyData.push({ date: dateStr, exercises: currentSession });
             if (!save(HISTORY_KEY, historyData)) {
@@ -788,7 +818,7 @@
 
         // Funzionamento offline: sw.js salva la pagina e il grafico sul telefono
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+            window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {}));
         }
     </script>
 </body>
