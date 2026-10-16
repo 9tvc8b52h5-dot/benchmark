@@ -367,7 +367,14 @@
         let toastTimer;
         function showToast(msg) {
             const t = document.getElementById('toast');
+            const box = document.getElementById('timerBox');
             t.textContent = msg;
+            // Se il timer di recupero è visibile, il banner scende sotto di lui invece di sovrapporsi
+            if (box && getComputedStyle(box).display !== 'none') {
+                t.style.top = (box.getBoundingClientRect().bottom + 10) + 'px';
+            } else {
+                t.style.top = '';
+            }
             clearTimeout(toastTimer);
             t.classList.add('show');
             toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
